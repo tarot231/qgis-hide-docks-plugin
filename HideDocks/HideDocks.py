@@ -98,9 +98,12 @@ class HideDocks(QObject):
 
         self.plugin_name = self.tr('Hide Docks')
         self.plugin_act = QAction(self.tr('Options…'))
+        self.plugin_act.setObjectName('mActionHideDocksOption')
         self.plugin_act.triggered.connect(self.open_dialog)
         self.iface.addPluginToMenu(self.plugin_name, self.plugin_act)
-        self.plugin_act.associatedWidgets()[0].setIcon(icons[1])
+        w = self.plugin_act.associatedWidgets()[0]
+        w.setObjectName('mActionHideDocks')
+        w.setIcon(icons[1])
 
         self.dialog = HideDocksDialog(self.mw)
 
@@ -151,7 +154,7 @@ class HideDocks(QObject):
                 if self.mw.dockWidgetArea(dock) == area \
                         and dock.isVisible() and not dock.isFloating() \
                         and dock not in self.sds.values():
-                    self.show_area(area)
+                    self.show_area(area, dock)
                     break
         QTimer.singleShot(0, sd_resized)
 
@@ -209,7 +212,7 @@ class HideDocks(QObject):
             self.sds[area].show()
         self.cwf.blockSignals(False)
 
-    def show_area(self, area):
+    def show_area(self, area, trigger_dock=None):
         if area == Qt.NoDockWidgetArea:
             return
         self.cwf.blockSignals(True)
@@ -240,6 +243,11 @@ class HideDocks(QObject):
                                 self.mw.resizeDocks([dock],
                                         [self.hided[dock].height()],
                                         Qt.Vertical)
+                            if trigger_dock:
+                                for i in range(tabbar.count()):
+                                    if sip.wrapinstance(tabbar.tabData(i),
+                                            QWidget) == trigger_dock:
+                                        tabbar.setCurrentIndex(i)
                     except TypeError:
                         pass
             for dock in docks:

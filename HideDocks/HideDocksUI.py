@@ -16,14 +16,14 @@
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
  *   the Free Software Foundation; either version 2 of the License, or     *
- *   (at your option) any later version.       f                            *
+ *   (at your option) any later version.                                   *
  *                                                                         *
  ***************************************************************************/
 """
 
 import os
-from qgis.PyQt.QtCore import *
-from qgis.PyQt.QtGui import *
+from qgis.PyQt.QtCore import Qt, pyqtSignal
+from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import *
 
 
@@ -97,15 +97,26 @@ class HideDocksToolBar(QToolBar):
         super().__init__(parent=parent)
 
         self.checks = []
-        self.checks.append(QAction(icons[0], self.tr('Hide left dock')))
-        self.checks.append(QAction(icons[1], self.tr('Hide right dock')))
-        self.checks.append(QAction(icons[2], self.tr('Hide top dock')))
-        self.checks.append(QAction(icons[3], self.tr('Hide bottom dock')))
+        self.checks.append(QAction(icons[0],
+                                   self.tr('Hide left dock'), parent))
+        self.checks.append(QAction(icons[1],
+                                   self.tr('Hide right dock'), parent))
+        self.checks.append(QAction(icons[2],
+                                   self.tr('Hide top dock'), parent))
+        self.checks.append(QAction(icons[3],
+                                   self.tr('Hide bottom dock'), parent))
+        self.checks[0].setObjectName('mActionHideLeftDock')
+        self.checks[1].setObjectName('mActionHideRightDock')
+        self.checks[2].setObjectName('mActionHideTopDock')
+        self.checks[3].setObjectName('mActionHideBottomDock')
         for d in (0, 3, 2, 1):
             self.checks[d].setCheckable(True)
             self.addAction(self.checks[d])
 
-        self.setWindowTitle(self.tr('Hide Docks Toolbar'))
+        title = self.tr('Hide Docks Toolbar')
+        self.setObjectName('mHideDocksToolbar')
+        self.setToolTip(title)
+        self.setWindowTitle(title)
 
     def get_state(self):
         state = 0

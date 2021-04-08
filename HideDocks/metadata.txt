@@ -3,9 +3,13 @@ name=Hide Docks
 qgisMinimumVersion=3.0
 description=Hide docked panels in each area
 description[ja]=ドッキングしたパネルを隠します
-about=Hide docked panels to expand the map canvas. The dock you want to hide can be selected in the toolbar. Hidden docks can be temporarily unhided by moving the mouse cursor.
-about[ja]=ドッキングしたパネルを隠してマップキャンバスを広くします。隠したいドックはツールバーで選択できます。隠したドックはマウスカーソルの移動で一時的に再表示させることもできます。
-version=0.5
+about=Hide docked panels to expand the map canvas. The dock you want to hide can be selected in the toolbar. Hidden docks can be temporarily unhided by moving the mouse cursor. See demo on the homepage.
+about[ja]=ドッキングしたパネルを隠してマップキャンバスを広くします。隠したいドックはツールバーで選択できます。隠したドックはマウスカーソルの移動で一時的に再表示させることもできます。ホームページにあるデモをご覧ください。
+version=0.5.1
+changelog=
+ 0.5.1
+  - For tabbed docks, show the trigger panel on top.
+  - Set objectName.
 author=Tarot Osuji
 email=tarot@sdf.org
 homepage=https://github.com/tarot231/qgis-hide-docks-plugin
