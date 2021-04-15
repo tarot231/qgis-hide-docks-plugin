@@ -67,6 +67,7 @@ class HideDocksDialog(QDialog):
         vbox.addWidget(buttonBox)
 
         self.setLayout(vbox)
+        self.setMaximumSize(0, 0)
         self.setWindowTitle(self.tr('Options'))
 
     def get_state(self):
@@ -87,8 +88,10 @@ class HideDocksMenu(QMenu):
         super().__init__(parent=parent)
 
         self.setTitle(self.tr('Hide Docks'))
+        self.setObjectName('mActionHideDocks')
         self.setIcon(icons[1])
         self.action = self.addAction(self.tr('Options…'))
+        self.action.setObjectName('mActionHideDocksOptions')
 '''
 
 

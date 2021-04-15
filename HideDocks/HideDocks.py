@@ -98,7 +98,7 @@ class HideDocks(QObject):
 
         self.plugin_name = self.tr('Hide Docks')
         self.plugin_act = QAction(self.tr('Options…'))
-        self.plugin_act.setObjectName('mActionHideDocksOption')
+        self.plugin_act.setObjectName('mActionHideDocksOptions')
         self.plugin_act.triggered.connect(self.open_dialog)
         self.iface.addPluginToMenu(self.plugin_name, self.plugin_act)
         w = self.plugin_act.associatedWidgets()[0]
@@ -219,9 +219,12 @@ class HideDocks(QObject):
         self.mw.removeDockWidget(self.sds[area])
         docks = []
         for dock in self.hided.keys():
-            if self.mw.dockWidgetArea(dock) == area:
-                docks.append(dock)
-                dock.show()
+            try:
+                if self.mw.dockWidgetArea(dock) == area:
+                    docks.append(dock)
+                    dock.show()
+            except RuntimeError:  # for deleted panel (e.g. attribute table)
+                del self.hided[dock]
         if docks:
             self.mw.resizeDocks(docks,
                     [self.hided[dock].width() for dock in docks], Qt.Horizontal)
