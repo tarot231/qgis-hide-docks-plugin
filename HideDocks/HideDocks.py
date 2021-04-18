@@ -83,6 +83,12 @@ class HideDocks(QObject):
         self.cwf.enter.connect(self.cw_enter)
         self.cwf.leave.connect(self.cw_leave)
         self.mw.centralWidget().installEventFilter(self.cwf)
+
+        self.target_area = Qt.NoDockWidgetArea
+        self.timer = QTimer()
+        self.timer.setSingleShot(True)
+        self.timer.timeout.connect(self.timer_timeout)
+
         qApp.aboutToQuit.connect(self.show_all)
 
         self.toolbar = HideDocksToolBar(self.mw)
@@ -125,6 +131,12 @@ class HideDocks(QObject):
         self.dialog.set_state(int(QSettings().value(
                 self.__class__.__name__ + '/dialogState',
                 Qt.NoDockWidgetArea)))
+        self.dialog.spinUnhide.setValue(int(QSettings().value(
+                self.__class__.__name__ + '/delayUnhide',
+                500)))
+        self.dialog.spinRehide.setValue(int(QSettings().value(
+                self.__class__.__name__ + '/delayRehide',
+                500)))
 
     def save_setting(self):
         QSettings().setValue(
@@ -133,6 +145,12 @@ class HideDocks(QObject):
         QSettings().setValue(
                 self.__class__.__name__ + '/dialogState',
                 self.dialog.get_state())
+        QSettings().setValue(
+                self.__class__.__name__ + '/delayUnhide',
+                self.dialog.spinUnhide.value())
+        QSettings().setValue(
+                self.__class__.__name__ + '/delayRehide',
+                self.dialog.spinRehide.value())
 
     def unload(self):
         self.save_setting()
@@ -169,7 +187,10 @@ class HideDocks(QObject):
         idx = l.index(min(l))
         area = 2 ** idx
         if self.toolbar.get_state() & area:
-            self.hide_area(area)
+            self.target_area = area
+            self.timer.start(self.dialog.spinRehide.value())
+        else:
+            self.timer.stop()
 
     def cw_leave(self, cw):
         pos = QCursor.pos()
@@ -186,9 +207,21 @@ class HideDocks(QObject):
         else:
             area = Qt.NoDockWidgetArea
         if self.toolbar.get_state() & area and self.dialog.get_state() & area:
-            self.show_area(area)
+            self.target_area = area
+            self.timer.start(self.dialog.spinUnhide.value())
+        else:
+            self.timer.stop()
+
+    def timer_timeout(self):
+        if self.mw.centralWidget().underMouse():
+            self.hide_area(self.target_area)
+        else:
+            self.show_area(self.target_area)
 
     def hide_area(self, area):
+        self.timer.stop()
+        if area == Qt.NoDockWidgetArea:
+            return
         self.cwf.blockSignals(True)
         docks = []
         for dock in self.mw.findChildren(QDockWidget):
@@ -213,6 +246,7 @@ class HideDocks(QObject):
         self.cwf.blockSignals(False)
 
     def show_area(self, area, trigger_dock=None):
+        self.timer.stop()
         if area == Qt.NoDockWidgetArea:
             return
         self.cwf.blockSignals(True)

@@ -25,6 +25,7 @@ import os
 from qgis.PyQt.QtCore import Qt, pyqtSignal
 from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import *
+from qgis.gui import QgsSpinBox
 
 
 plugin_dir  = os.path.dirname(__file__)
@@ -59,11 +60,29 @@ class HideDocksDialog(QDialog):
                            0, i + 1, alignment=Qt.AlignHCenter)
             grid.addWidget(self.checks[d],
                            1, i + 1, alignment=Qt.AlignHCenter)
+        gridWidget = QWidget()
+        gridWidget.setLayout(grid)
+
+        self.spinUnhide = QgsSpinBox()
+        self.spinRehide = QgsSpinBox()
+        for w in (self.spinUnhide, self.spinRehide):
+            w.setSuffix(' ms')
+            w.setMaximum(10000)
+            w.setSingleStep(50)
+            w.setClearValue(500)
+
+        form = QFormLayout()
+        form.addRow(self.tr('Auto-unhide'), self.spinUnhide)
+        form.addRow(self.tr('Auto-rehide'), self.spinRehide)
+        groupDelay = QGroupBox(self.tr('Delay Time'))
+        groupDelay.setLayout(form)
+
         buttonBox = QDialogButtonBox(QDialogButtonBox.Ok,
                                      accepted=self.accept)
 
         vbox = QVBoxLayout()
-        vbox.addLayout(grid)
+        vbox.addWidget(gridWidget)
+        vbox.addWidget(groupDelay)
         vbox.addWidget(buttonBox)
 
         self.setLayout(vbox)
