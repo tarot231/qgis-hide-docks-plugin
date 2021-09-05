@@ -177,13 +177,12 @@ class HideDocks(QObject):
         QTimer.singleShot(0, sd_resized)
 
     def cw_enter(self, cw):
-        pos = QCursor.pos()
+        pos = cw.mapFromGlobal(QCursor.pos())
         geom = cw.geometry()
-        win_geom = cw.window().geometry()
-        l = [pos.x() - (win_geom.x() + geom.x()),
-             win_geom.x() + geom.x() + geom.width() - pos.x(),
-             pos.y() - (win_geom.y() + geom.y()),
-             win_geom.y() + geom.y() + geom.height() - pos.y()]
+        l = [pos.x(),
+             geom.width() - pos.x(),
+             pos.y(),
+             geom.height() - pos.y()]
         idx = l.index(min(l))
         area = 2 ** idx
         if self.toolbar.get_state() & area:
@@ -193,16 +192,15 @@ class HideDocks(QObject):
             self.timer.stop()
 
     def cw_leave(self, cw):
-        pos = QCursor.pos()
+        pos = cw.mapFromGlobal(QCursor.pos())
         geom = cw.geometry()
-        win_geom = cw.window().geometry()
-        if pos.x() < win_geom.x() + geom.x():
+        if pos.x() < 0:
             area = Qt.LeftDockWidgetArea
-        elif pos.x() >= win_geom.x() + geom.x() + geom.width():
+        elif pos.x() >= geom.width():
             area = Qt.RightDockWidgetArea
-        elif pos.y() < win_geom.y() + geom.y():
+        elif pos.y() < 0:
             area = Qt.TopDockWidgetArea
-        elif pos.y() >= win_geom.y() + geom.y() + geom.height():
+        elif pos.y() >= geom.height():
             area = Qt.BottomDockWidgetArea
         else:
             area = Qt.NoDockWidgetArea
@@ -252,13 +250,16 @@ class HideDocks(QObject):
         self.cwf.blockSignals(True)
         self.mw.removeDockWidget(self.sds[area])
         docks = []
+        deleted = []
         for dock in self.hided.keys():
             try:
                 if self.mw.dockWidgetArea(dock) == area:
                     docks.append(dock)
                     dock.show()
             except RuntimeError:  # for deleted panel (e.g. attribute table)
-                del self.hided[dock]
+                deleted.append(dock)
+        for dock in deleted:
+            del self.hided[dock]
         if docks:
             self.mw.resizeDocks(docks,
                     [self.hided[dock].width() for dock in docks], Qt.Horizontal)
