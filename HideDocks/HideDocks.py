@@ -22,35 +22,34 @@
 """
 
 import os
+from qgis.core import QgsApplication
 from qgis.PyQt.QtCore import *
 from qgis.PyQt.QtGui import *
 from qgis.PyQt.QtWidgets import *
 try:
-    from qgis.PyQt import sip
+    from qgis.PyQt import sip  # from QGIS 3.4
 except ImportError:
     import sip
-from qgis.core import QgsProject
-from .HideDocksUI import HideDocksDialog, HideDocksToolBar, ShrinkedDock, icons
+from .HideDocksUI import HideDocksToolBar, ShrinkedDock
 
 
 class MainWindowFilter(QObject):
-    show = pyqtSignal()
+    layoutRequest = pyqtSignal()
+    mousePress    = pyqtSignal()
+    mouseRelease  = pyqtSignal()
+    show          = pyqtSignal()
 
     def eventFilter(self, obj, event):
-        if event.type() == QEvent.Show:
+        if event.type()   == QEvent.LayoutRequest:
+            self.layoutRequest.emit()
+        elif event.type() == QEvent.MouseButtonPress \
+                and event.button() == Qt.LeftButton:
+            self.mousePress.emit()
+        elif event.type() == QEvent.MouseButtonRelease \
+                and event.button() == Qt.LeftButton:
+            self.mouseRelease.emit()
+        elif event.type() == QEvent.Show:
             self.show.emit()
-        return False
-
-
-class CentralWidgetFilter(QObject):
-    enter = pyqtSignal(QWidget)
-    leave = pyqtSignal(QWidget)
-
-    def eventFilter(self, obj, event):
-        if event.type() == QEvent.Enter:
-            self.enter.emit(obj)
-        elif event.type() == QEvent.Leave:
-            self.leave.emit(obj)
         return False
 
 
@@ -59,168 +58,150 @@ class HideDocks(QObject):
         super().__init__()
         self.iface = iface
 
-        if QSettings().value('locale/overrideFlag', type=bool):
-            locale = QLocale(QSettings().value('locale/userLocale'))
-        else:
-            locale = QLocale.system()
         self.translator = QTranslator()
-        if self.translator.load(locale, '', '',
-                os.path.join(os.path.dirname(__file__), 'i18n')):
+        if self.translator.load(QLocale(QgsApplication.locale()),
+                '', '', os.path.join(os.path.dirname(__file__), 'i18n')):
             qApp.installTranslator(self.translator)
 
     def initGui(self):
         self.mw = self.iface.mainWindow()
         self.hided = {}
         self.current_tab = []
+
+        self.panel_states = {dock: (dock.isVisible(), dock.isFloating())
+                             for dock in self.mw.findChildren(QDockWidget)}
+        self.trigger = []
+
         self.sds = {}  # ShrinkedDocks
         for area in (Qt.LeftDockWidgetArea, Qt.RightDockWidgetArea,
                      Qt.TopDockWidgetArea, Qt.BottomDockWidgetArea):
-            sd = ShrinkedDock(area)
-            sd.pressed.connect(self.show_area)
-            sd.resize.connect(self.sd_resize)
-            self.sds[area] = sd
-        self.cwf = CentralWidgetFilter()
-        self.cwf.enter.connect(self.cw_enter)
-        self.cwf.leave.connect(self.cw_leave)
-        self.mw.centralWidget().installEventFilter(self.cwf)
-
-        self.target_area = Qt.NoDockWidgetArea
-        self.timer = QTimer()
-        self.timer.setSingleShot(True)
-        self.timer.timeout.connect(self.timer_timeout)
-
-        qApp.aboutToQuit.connect(self.show_all)
+            self.sds[area] = ShrinkedDock(area)
 
         self.toolbar = HideDocksToolBar(self.mw)
+        self.iface.addToolBar(self.toolbar)
+
+        '''  ## bad ##
+        for i in range(4):
+            self.toolbar.checks[i].toggled.connect(
+                    lambda checked: self.on_check_toggled(1 << i, checked))
+        '''
         self.toolbar.checks[0].toggled.connect(lambda checked:
-                self.check_toggled(Qt.LeftDockWidgetArea, checked))
+                self.on_check_toggled(Qt.LeftDockWidgetArea, checked))
         self.toolbar.checks[1].toggled.connect(lambda checked:
-                self.check_toggled(Qt.RightDockWidgetArea, checked))
+                self.on_check_toggled(Qt.RightDockWidgetArea, checked))
         self.toolbar.checks[2].toggled.connect(lambda checked:
-                self.check_toggled(Qt.TopDockWidgetArea, checked))
+                self.on_check_toggled(Qt.TopDockWidgetArea, checked))
         self.toolbar.checks[3].toggled.connect(lambda checked:
-                self.check_toggled(Qt.BottomDockWidgetArea, checked))
-        self.mw.addToolBar(self.toolbar)
+                self.on_check_toggled(Qt.BottomDockWidgetArea, checked))
 
-        self.plugin_name = self.tr('Hide Docks')
-        self.plugin_act = QAction(self.tr('Options…'))
-        self.plugin_act.setObjectName('mActionHideDocksOptions')
-        self.plugin_act.triggered.connect(self.open_dialog)
-        self.iface.addPluginToMenu(self.plugin_name, self.plugin_act)
-        w = self.plugin_act.associatedWidgets()[0]
-        w.setObjectName('mActionHideDocks')
-        w.setIcon(icons[1])
+        self.mouse_pos = QPoint()
+        self.mwf = MainWindowFilter()
+        self.mwf.layoutRequest.connect(self.on_layout_request)
+        self.mwf.mousePress.connect(self.on_mouse_press)
+        self.mwf.mouseRelease.connect(self.on_mouse_release)
+        self.mw.installEventFilter(self.mwf)
 
-        self.dialog = HideDocksDialog(self.mw)
+        qApp.aboutToQuit.connect(self.show_all)
 
         if self.mw.isVisible():
             self.restore_setting()
         else:
-            self.mwf = MainWindowFilter()
             self.mwf.show.connect(self.first_show)
-            self.mw.installEventFilter(self.mwf)
 
     def first_show(self):
-        self.mw.removeEventFilter(self.mwf)
-        self.restore_setting()
+        self.mwf.show.disconnect(self.first_show)
+        #self.restore_setting()  # bad
+        QTimer.singleShot(0, self.restore_setting)
 
     def restore_setting(self):
         self.toolbar.set_state(int(QSettings().value(
                 self.__class__.__name__ + '/toolbarState',
                 Qt.NoDockWidgetArea)))
-        self.dialog.set_state(int(QSettings().value(
-                self.__class__.__name__ + '/dialogState',
-                Qt.NoDockWidgetArea)))
-        self.dialog.spinUnhide.setValue(int(QSettings().value(
-                self.__class__.__name__ + '/delayUnhide',
-                500)))
-        self.dialog.spinRehide.setValue(int(QSettings().value(
-                self.__class__.__name__ + '/delayRehide',
-                500)))
 
     def save_setting(self):
         QSettings().setValue(
                 self.__class__.__name__ + '/toolbarState',
                 self.toolbar.get_state())
-        QSettings().setValue(
-                self.__class__.__name__ + '/dialogState',
-                self.dialog.get_state())
-        QSettings().setValue(
-                self.__class__.__name__ + '/delayUnhide',
-                self.dialog.spinUnhide.value())
-        QSettings().setValue(
-                self.__class__.__name__ + '/delayRehide',
-                self.dialog.spinRehide.value())
 
     def unload(self):
         self.save_setting()
-        self.mw.centralWidget().removeEventFilter(self.cwf)
-        self.iface.removePluginMenu(self.plugin_name, self.plugin_act)
-        self.mw.removeToolBar(self.toolbar)
-        self.dialog.hide()
+        self.mw.removeEventFilter(self.mwf)
+        self.toolbar.deleteLater()
         self.show_all()
 
-    def check_toggled(self, area, checked):
+    def on_check_toggled(self, area, checked):
         if checked:
             self.hide_area(area)
         else:
             self.show_area(area)
 
-    def sd_resize(self, area):
-        def sd_resized():
-            for dock in self.mw.findChildren(QDockWidget):
-                if self.mw.dockWidgetArea(dock) == area \
-                        and dock.isVisible() and not dock.isFloating() \
-                        and dock not in self.sds.values():
-                    self.show_area(area, dock)
-                    break
-        QTimer.singleShot(0, sd_resized)
+    def on_mouse_press(self):
+        self.mouse_pos = QCursor.pos()
 
-    def cw_enter(self, cw):
-        pos = cw.mapFromGlobal(QCursor.pos())
-        geom = cw.geometry()
-        l = [pos.x(),
-             geom.width() - pos.x(),
-             pos.y(),
-             geom.height() - pos.y()]
-        idx = l.index(min(l))
-        area = 2 ** idx
-        if self.toolbar.get_state() & area:
-            self.target_area = area
-            self.timer.start(self.dialog.spinRehide.value())
-        else:
-            self.timer.stop()
+    def on_mouse_release(self):
+        if self.mouse_pos == QCursor.pos():
+            area = self.get_separator_area()
+            if area:
+                num = len(bin(area)) - 3
+                self.toolbar.checks[num].setChecked(
+                        not self.toolbar.checks[num].isChecked())
 
-    def cw_leave(self, cw):
-        pos = cw.mapFromGlobal(QCursor.pos())
-        geom = cw.geometry()
-        if pos.x() < 0:
-            area = Qt.LeftDockWidgetArea
-        elif pos.x() >= geom.width():
-            area = Qt.RightDockWidgetArea
-        elif pos.y() < 0:
-            area = Qt.TopDockWidgetArea
-        elif pos.y() >= geom.height():
-            area = Qt.BottomDockWidgetArea
-        else:
-            area = Qt.NoDockWidgetArea
-        if self.toolbar.get_state() & area and self.dialog.get_state() & area:
-            self.target_area = area
-            self.timer.start(self.dialog.spinUnhide.value())
-        else:
-            self.timer.stop()
+    def get_separator_area(self):
+        cw = self.mw.centralWidget()
+        pos = cw.mapFromGlobal(self.mouse_pos)
+        l = [pos.x(),                               # left
+             cw.geometry().width()  - pos.x() - 1,  # right
+             pos.y(),                               # top
+             cw.geometry().height() - pos.y() - 1]  # bottom
+        sep_width = self.mw.style().pixelMetric(
+                QStyle.PM_DockWidgetSeparatorExtent)
+        areas        = [i for i, x in enumerate(l) if x < 0]
+        areas_on_sep = [i for i, x in enumerate(l) if x < 0 and x >= -sep_width]
+        if areas_on_sep:
+            if len(areas) == 1:
+                return 1 << areas[0]
+            corner = areas[0] + (areas[1] - 2) * 2
+            dock_area = self.mw.corner(corner)
+            if dock_area in (Qt.LeftDockWidgetArea, Qt.RightDockWidgetArea) \
+                    and [x for x in areas_on_sep if x <= 1]:
+                return 1 << areas[0]
+            elif dock_area in (Qt.TopDockWidgetArea, Qt.BottomDockWidgetArea) \
+                    and [x for x in areas_on_sep if x >= 2]:
+                return 1 << areas[1]
+        return Qt.NoDockWidgetArea
 
-    def timer_timeout(self):
-        if self.mw.centralWidget().underMouse():
-            self.hide_area(self.target_area)
-        else:
-            self.show_area(self.target_area)
+    def on_layout_request(self):
+        self.trigger = []
+        for dock in self.mw.findChildren(QDockWidget):
+            if dock not in self.sds.values():
+                panel_state = (dock.isVisible(), dock.isFloating())
+                if dock in self.panel_states:
+                    if self.panel_states[dock] != panel_state:
+                        continue
+                self.panel_states[dock] = panel_state
+                if panel_state == (True, False):
+                    self.trigger += [dock]
+
+        # Catch the newly displayed docking panel and setChecked() to False
+        state = self.toolbar.get_state()
+        enabled = 0
+        for dock in self.mw.findChildren(QDockWidget):
+            area = self.mw.dockWidgetArea(dock)
+            if dock.isVisible() and not dock.isFloating():
+                enabled |= area
+                if area & state and \
+                        dock not in self.sds.values():
+                    num = len(bin(area)) - 3
+                    self.toolbar.checks[num].setChecked(False)
+                    state = self.toolbar.get_state()
+        for i in range(4):
+            self.toolbar.checks[i].setEnabled(
+                    bool(enabled & 1 << i))
 
     def hide_area(self, area):
-        self.timer.stop()
         if area == Qt.NoDockWidgetArea:
             return
-        self.cwf.blockSignals(True)
+        self.mwf.blockSignals(True)
         docks = []
         for dock in self.mw.findChildren(QDockWidget):
             if self.mw.dockWidgetArea(dock) == area \
@@ -241,13 +222,12 @@ class HideDocks(QObject):
                 dock.hide()
             self.mw.addDockWidget(area, self.sds[area])
             self.sds[area].show()
-        self.cwf.blockSignals(False)
+        self.mwf.blockSignals(False)
 
-    def show_area(self, area, trigger_dock=None):
-        self.timer.stop()
+    def show_area(self, area):
         if area == Qt.NoDockWidgetArea:
             return
-        self.cwf.blockSignals(True)
+        self.mwf.blockSignals(True)
         self.mw.removeDockWidget(self.sds[area])
         docks = []
         deleted = []
@@ -281,20 +261,18 @@ class HideDocks(QObject):
                                 self.mw.resizeDocks([dock],
                                         [self.hided[dock].height()],
                                         Qt.Vertical)
-                            if trigger_dock:
+                            if self.trigger:
                                 for i in range(tabbar.count()):
                                     if sip.wrapinstance(tabbar.tabData(i),
-                                            QWidget) == trigger_dock:
+                                            QWidget) in self.trigger:
                                         tabbar.setCurrentIndex(i)
                     except TypeError:
                         pass
             for dock in docks:
                 del self.hided[dock]
-        self.cwf.blockSignals(False)
+        self.trigger = []
+        self.mwf.blockSignals(False)
 
     def show_all(self):
         for i in range(4):
-            self.show_area(2 ** i)
-
-    def open_dialog(self):
-        self.dialog.show()
+            self.show_area(1 << i)
