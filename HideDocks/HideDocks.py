@@ -139,7 +139,9 @@ class HideDocks(QObject):
         self.mouse_pos = QCursor.pos()
 
     def on_mouse_release(self):
-        if self.mouse_pos == QCursor.pos():
+        print(qApp.widgetAt(self.mouse_pos))
+        if self.mouse_pos == QCursor.pos() and \
+                isinstance(qApp.widgetAt(self.mouse_pos), QMainWindow):
             area = self.get_separator_area()
             if area:
                 num = len(bin(area)) - 3
@@ -153,22 +155,16 @@ class HideDocks(QObject):
              cw.geometry().width()  - pos.x() - 1,  # right
              pos.y(),                               # top
              cw.geometry().height() - pos.y() - 1]  # bottom
-        sep_width = self.mw.style().pixelMetric(
-                QStyle.PM_DockWidgetSeparatorExtent)
-        areas        = [i for i, x in enumerate(l) if x < 0]
-        areas_on_sep = [i for i, x in enumerate(l) if x < 0 and x >= -sep_width]
-        if areas_on_sep:
-            if len(areas) == 1:
-                return 1 << areas[0]
+        areas = [i for i, x in enumerate(l) if x < 0]
+        if len(areas) == 1:
+            return 1 << areas[0]
+        else:
             corner = areas[0] + (areas[1] - 2) * 2
             dock_area = self.mw.corner(corner)
-            if dock_area in (Qt.LeftDockWidgetArea, Qt.RightDockWidgetArea) \
-                    and [x for x in areas_on_sep if x <= 1]:
+            if dock_area in (Qt.LeftDockWidgetArea, Qt.RightDockWidgetArea):
                 return 1 << areas[0]
-            elif dock_area in (Qt.TopDockWidgetArea, Qt.BottomDockWidgetArea) \
-                    and [x for x in areas_on_sep if x >= 2]:
+            else:
                 return 1 << areas[1]
-        return Qt.NoDockWidgetArea
 
     def on_layout_request(self):
         self.trigger = []

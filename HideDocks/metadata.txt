@@ -5,8 +5,10 @@ description=Hides docked panels by area
 description[ja]=ドッキングしたパネルをエリア毎に隠します
 about=Hides docked panels to expand the map canvas. You can hide the docks by area. The docks can be toggled on and off from the toolbar or by clicking on the separator.
 about[ja]=ドッキングしたパネルを隠してマップキャンバスを広くします。ドックはエリア毎に隠すことができます。ドックの表示／非表示の切り替えはツールバーのほか、セパレータをクリックすることでもできます。
-version=0.7
+version=0.7.1
 changelog=
+ 0.7.1
+  - Fixed mistrigger on non-separator clicks
  0.7
   - Click on the separator now toggles hide/unhide
   - Removed auto unhide/rehide
